@@ -2,7 +2,9 @@
 
 Export a PyTorch model and its derivative graphs to ONNX, then use it in CasADi optimization. PyTorch is needed at export time; evaluation uses CasADi's native ONNX Runtime backend.
 
-This is a local, unpublished prototype intended for `casadi/torch2casadi`. It is not yet available from PyPI.
+An MIT-licensed early-development package. The first PyPI release is being prepared.
+
+Source: https://github.com/casadi/torch2casadi
 
 ```python
 import torch
@@ -27,7 +29,13 @@ The trained-surrogate example in `examples/opti.py` includes a coupled constrain
 
 ## Installation
 
-Use Python 3.10 or later and install the local checkout with `python -m pip install .`. Install the appropriate PyTorch 2.6 CPU/CUDA wheel first if necessary. The dependency versions in `pyproject.toml` describe the tested exporter stack; they are deliberately narrow for this initial prototype.
+Use Python 3.10–3.12. Until the first PyPI release, install the repository:
+
+```sh
+python -m pip install 'git+https://github.com/casadi/torch2casadi.git'
+```
+
+For development, clone the repository and use `python -m pip install -e '.[dev]'`. Install the appropriate PyTorch 2.6 CPU/CUDA wheel first if necessary. The dependency versions in `pyproject.toml` describe the tested exporter stack; they are deliberately narrow for this initial prototype.
 
 For CasADi integration, build branch `onnx-primal-efficiency` with `WITH_ONNX=ON` and `WITH_ONNX_RUNTIME=ON`. The sibling derivative feature is in commit `b5040ffd76`. Installing the Python `onnxruntime` wheel does not enable CasADi's native backend. The exporter itself does not depend on the CasADi Python package.
 
@@ -58,13 +66,19 @@ Keep sibling files together until derivatives are constructed. Constructed CasAD
 
 ## Development
 
-With the feature CasADi build on `PYTHONPATH`:
+Run the exporter tests and build the distributions:
 
 ```sh
 python -m unittest discover -s tests
 python -m build
 ```
 
+For the additional integration tests, put the feature CasADi build on `PYTHONPATH` and run `TORCH2CASADI_INTEGRATION=1 python -m unittest discover -s tests`. Those tests require the native ORT plugin and are explicitly skipped in ordinary package CI until the CasADi feature is released.
+
 The tests cover Tanh, Sigmoid, Softplus, tensor-shaped nonlinear algebra, independent seed counts, Hessians through CasADi and serialization after the ONNX files are deleted.
 
 The implementation uses experimental FX tracing APIs and a PyTorch 2.6 export workaround. Broader PyTorch-version/operator support needs a compatibility test matrix before a stable release. Future arbitrary derivative-family export can build on the same packaging convention; this initial package emits first derivatives and forward-over-adjoint, not all nesting patterns supported by CasADi.
+
+## Releases and provenance
+
+The [release guide](RELEASE.md) describes TestPyPI/PyPI Trusted Publishing and verification. Releases use OIDC with GitHub build-provenance attestations and PyPI publishing attestations.

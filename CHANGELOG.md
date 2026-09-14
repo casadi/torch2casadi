@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.1.0.dev0
+## 0.1
 
-Initial development release:
+Initial release:
 
 - Export primal, adjoint and forward-over-adjoint ONNX graphs for CasADi.
 - Optionally export forward sensitivities.

@@ -26,7 +26,7 @@ GitHub environments `pypi` and `testpypi` must match those names. A required rev
 ## Release procedure
 
 1. Update the version in `pyproject.toml` and `CHANGELOG.md`, commit, and wait for CI.
-2. Tag that commit with `v` followed by the exact version (initial candidate: `v0.1.0.dev0`). Push the tag.
+2. Tag that commit with `v` followed by the exact version (initial candidate: `v0.1`). Push the tag.
 3. Dispatch `.github/workflows/release.yml` from that tag with target `testpypi`.
 4. Inspect the TestPyPI files, metadata, provenance and install behavior.
 5. Dispatch the same workflow/tag with target `pypi` when ready to publish.
@@ -34,7 +34,7 @@ GitHub environments `pypi` and `testpypi` must match those names. A required rev
 Example dispatch (uploads real files; run only when ready):
 
 ```sh
-gh workflow run release.yml --repo casadi/torch2casadi --ref v0.1.0.dev0 -f target=testpypi
+gh workflow run release.yml --repo casadi/torch2casadi --ref v0.1 -f target=testpypi
 ```
 
 The workflow verifies tag/version agreement, runs CI against built wheels on Python 3.10–3.12, creates GitHub build-provenance attestations, and uploads using OIDC Trusted Publishing with PyPI attestations enabled. All actions are pinned to commit hashes.
@@ -44,7 +44,7 @@ The workflow verifies tag/version agreement, runs CI against built wheels on Pyt
 For a downloaded release artifact:
 
 ```sh
-gh attestation verify torch2casadi-0.1.0.dev0-py3-none-any.whl --repo casadi/torch2casadi
+gh attestation verify torch2casadi-0.1-py3-none-any.whl --repo casadi/torch2casadi
 ```
 
 PyPI's package-file details expose the publishing attestations. They can also be checked with the `pypi-attestations` tool and the artifact's direct PyPI download URL:

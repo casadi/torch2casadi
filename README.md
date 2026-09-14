@@ -2,7 +2,7 @@
 
 Export a PyTorch model and its derivative graphs to ONNX, then use it in CasADi optimization. PyTorch is needed at export time; evaluation uses CasADi's native ONNX Runtime backend.
 
-An MIT-licensed early-development package. The first PyPI release is being prepared.
+An MIT-licensed early-development package.
 
 Source: https://github.com/casadi/torch2casadi
 
@@ -29,10 +29,10 @@ The trained-surrogate example in `examples/opti.py` includes a coupled constrain
 
 ## Installation
 
-Use Python 3.10–3.12. Until the first PyPI release, install the repository:
+Use Python 3.10–3.12:
 
 ```sh
-python -m pip install 'git+https://github.com/casadi/torch2casadi.git'
+python -m pip install torch2casadi
 ```
 
 For development, clone the repository and use `python -m pip install -e '.[dev]'`. Install the appropriate PyTorch 2.6 CPU/CUDA wheel first if necessary. The dependency versions in `pyproject.toml` describe the tested exporter stack; they are deliberately narrow for this initial prototype.

@@ -41,7 +41,7 @@ CI currently tests Torch 2.6 with the companion versions listed in [requirements
 
 For development, install the checkout with `python -m pip install -e .` and install `build` and `twine` separately if needed.
 
-The published 0.1 release predates this policy and still declares runtime dependencies. To install that version without changing an existing environment, use `python -m pip install --no-deps torch2casadi==0.1`. The dependency-free metadata will ship in the next release.
+The published 0.1 release predates this policy and still declares runtime dependencies. To install that version without changing an existing environment, use `python -m pip install --no-deps torch2casadi==0.1`. Starting with 0.1.1, no runtime dependencies are declared.
 
 For CasADi integration, build branch `onnx-primal-efficiency` with `WITH_ONNX=ON` and `WITH_ONNX_RUNTIME=ON`. The sibling derivative feature is in commit `b5040ffd76`. Installing the Python `onnxruntime` wheel does not enable CasADi's native backend. The exporter itself does not depend on the CasADi Python package.
 

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torch2casadi"
+version = "0.1.0.dev0"
+description = "Export PyTorch models and derivative ONNX graphs for CasADi optimization"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.6,<2.7", "onnx==1.17.0", "onnxscript==0.2.7", "protobuf>=5.29.5,<6", "onnxruntime>=1.20,<2", "numpy>=1.24"]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "build"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

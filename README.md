@@ -81,4 +81,4 @@ The implementation uses experimental FX tracing APIs and a PyTorch 2.6 export wo
 
 ## Releases and provenance
 
-The [release guide](RELEASE.md) describes TestPyPI/PyPI Trusted Publishing and verification. Releases use OIDC with GitHub build-provenance attestations and PyPI publishing attestations.
+The [release guide](https://github.com/casadi/torch2casadi/blob/main/RELEASE.md) describes TestPyPI/PyPI Trusted Publishing and verification. Releases use OIDC with GitHub build-provenance attestations and PyPI publishing attestations.

@@ -2,3 +2,4 @@ include CHANGELOG.md
 include RELEASE.md
 recursive-include tests *.py
 recursive-include examples *.py
+include requirements-ci.txt

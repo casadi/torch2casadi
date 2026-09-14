@@ -35,7 +35,13 @@ Use Python 3.10–3.12:
 python -m pip install torch2casadi
 ```
 
-For development, clone the repository and use `python -m pip install -e '.[dev]'`. Install the appropriate PyTorch 2.6 CPU/CUDA wheel first if necessary. The dependency versions in `pyproject.toml` describe the tested exporter stack; they are deliberately narrow for this initial prototype.
+Dependencies are deliberately user-managed: installing torch2casadi does not install or upgrade Torch, CasADi, or any other runtime package. Export still needs Torch, ONNX, ONNXScript, NumPy and the Python ONNX Runtime package to be available in your environment. Keep the Torch build appropriate for your hardware and workflow.
+
+CI currently tests Torch 2.6 with the companion versions listed in [requirements-ci.txt](https://github.com/casadi/torch2casadi/blob/main/requirements-ci.txt). That file describes a tested environment, not installation requirements or a guarantee about other versions. The exporter uses experimental Torch APIs, so custom builds need validation.
+
+For development, install the checkout with `python -m pip install -e .` and install `build` and `twine` separately if needed.
+
+The published 0.1 release predates this policy and still declares runtime dependencies. To install that version without changing an existing environment, use `python -m pip install --no-deps torch2casadi==0.1`. The dependency-free metadata will ship in the next release.
 
 For CasADi integration, build branch `onnx-primal-efficiency` with `WITH_ONNX=ON` and `WITH_ONNX_RUNTIME=ON`. The sibling derivative feature is in commit `b5040ffd76`. Installing the Python `onnxruntime` wheel does not enable CasADi's native backend. The exporter itself does not depend on the CasADi Python package.
 

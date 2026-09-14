@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Remove all runtime dependency declarations so installation preserves user-managed
+  Torch builds and other packages. Keep the tested export environment in CI only.
+
 ## 0.1
 
 Initial release:

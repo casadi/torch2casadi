@@ -1,0 +1,7 @@
+# Tested export stack for CI; intentionally not package installation requirements.
+# CI installs its CPU Torch wheel separately. Do not replace a custom Torch build.
+onnx==1.17.0
+onnxscript==0.2.7
+protobuf>=5.29.5,<6
+onnxruntime>=1.20,<2
+numpy>=1.24

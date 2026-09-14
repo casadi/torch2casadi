@@ -18,16 +18,12 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Topic :: Scientific/Engineering :: Mathematics",
 ]
-dependencies = ["torch>=2.6,<2.7", "onnx==1.17.0", "onnxscript==0.2.7", "protobuf>=5.29.5,<6", "onnxruntime>=1.20,<2", "numpy>=1.24"]
 
 [project.urls]
 Homepage = "https://github.com/casadi/torch2casadi"
 Repository = "https://github.com/casadi/torch2casadi"
 Issues = "https://github.com/casadi/torch2casadi/issues"
 Changelog = "https://github.com/casadi/torch2casadi/blob/main/CHANGELOG.md"
-
-[project.optional-dependencies]
-dev = ["build>=1.2", "twine>=6"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

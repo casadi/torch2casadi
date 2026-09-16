@@ -35,7 +35,7 @@ Use Python 3.10–3.12:
 python -m pip install torch2casadi
 ```
 
-Dependencies are deliberately user-managed: installing torch2casadi does not install or upgrade Torch, CasADi, or any other runtime package. Export still needs Torch, ONNX, ONNXScript, NumPy and the Python ONNX Runtime package to be available in your environment. Keep the Torch build appropriate for your hardware and workflow.
+Dependencies are deliberately user-managed: installing torch2casadi does not install or upgrade Torch, CasADi, or any other runtime package. Export needs Torch, ONNX, ONNXScript and NumPy in your environment. The Python ONNX Runtime package is needed only for numerical tests. Keep the Torch build appropriate for your hardware and workflow.
 
 CI currently tests Torch 2.6 with the companion versions listed in [requirements-ci.txt](https://github.com/casadi/torch2casadi/blob/main/requirements-ci.txt). That file describes a tested environment, not installation requirements or a guarantee about other versions. The exporter uses experimental Torch APIs, so custom builds need validation.
 
@@ -47,11 +47,11 @@ For CasADi integration, build branch `onnx-primal-efficiency` with `WITH_ONNX=ON
 
 ## Export contract
 
-- One tensor input and one tensor output; float32 or float64 on CPU during export.
-- Tensor shapes are fixed by the example. All elements are differentiable, including any model batch axes. No independence between batch elements is assumed.
+- One tensor input, or a tuple of positional tensor inputs, and one tensor output; float32 or float64 on CPU during export. All inputs use the same dtype.
+- Tensor shapes are fixed by the examples. Inputs are differentiable by default, including all model batch elements. `is_diff_in` can disable differentiation for whole input arguments. No independence between batch elements is assumed.
 - The module is copied, switched to evaluation mode and frozen. The caller's parameters and training mode are preserved.
 - Inputs and outputs are flattened in PyTorch element order and exposed as CasADi column vectors. Derivative direction counts are dynamic.
-- Modules must support the required PyTorch function transforms and ONNX operations. Data-dependent Python branches, stochastic evaluation, integer/discrete inputs, multiple argument/output trees, and unsupported custom operators are outside this initial contract.
+- Modules must support the required PyTorch function transforms and ONNX operations. Data-dependent Python branches, stochastic evaluation, integer/discrete inputs, nested argument/output trees, and unsupported custom operators are outside this initial contract.
 - Smooth models are appropriate for exact-Hessian optimization. ReLU networks do not acquire smooth Hessians through export.
 
 Default files:
@@ -66,9 +66,69 @@ Default files:
 
 Combined columns are grouped by outer forward direction, then inner adjoint direction. The mixed graph differentiates both the primal input and the adjoint seed. It computes products through AD without forming a dense Jacobian or Hessian as an intermediate.
 
-Each export checks all graphs with ONNX's checker and executes them with independent `(nadj, nfwd)` counts `(1,1)`, `(2,3)`, `(3,2)`, `(4,5)` at perturbed inputs. Mixed and forward derivatives are checked against PyTorch forward AD, independently of the reverse-over-reverse export formulation. Files are staged until all checks pass. Export into a fresh model-family directory, so old derivative files cannot silently survive a changed model. Validation uses relative/absolute tolerances of 2e-5/2e-6 for float32 and 1e-8/1e-9 for float64; ORT fusion can round scalar coefficients even in a double graph. These numerical checks supplement the exporter contract; they cannot prove correctness over arbitrary data-dependent behavior.
+Each export checks all graphs with ONNX's checker. Files are staged until all graphs pass. Export into a fresh model-family directory, or pass `overwrite=True` to replace an existing family. Derivative files no longer produced are removed; unrelated models are preserved.
+
+ONNX Runtime is a test dependency only; it is not imported or required by the exporter. The tests execute exported graphs at perturbed inputs with independent `(nadj, nfwd)` counts `(1,1)`, `(2,3)`, `(3,2)`, `(4,5)` and compare primal, adjoint, forward, and mixed derivatives with PyTorch AD. Tolerances are 2e-5/2e-6 for float32 and 1e-8/1e-9 for float64. These checks cover the test models, not every model supplied to `export()`.
 
 Keep sibling files together until derivatives are constructed. Constructed CasADi derivatives embed their model bytes, including when serialized.
+
+## Runtime parameters without derivatives
+
+Expose a prescribed quantity, such as ambient temperature, as a separate model argument:
+
+```python
+class Vibration(torch.nn.Module):
+    def __init__(self, network):
+        super().__init__()
+        self.network = network  # three features -> one vibration score
+
+    def forward(self, x, temperature):
+        return self.network(torch.cat((x, temperature), dim=1))
+
+flags = [True, False]
+path = export(Vibration(network), (torch.zeros(1, 2), torch.zeros(1, 1)), "generated",
+              input_names=["x", "temperature"], is_diff_in=flags)
+r = ca.GraphBuilder(str(path)).create("r")
+
+opti = ca.Opti()
+x = opti.variable(2)
+temperature = opti.parameter()
+opti.set_value(temperature, 0.0)
+opti.subject_to(r(x, temperature) <= 0.8)
+```
+
+With the companion CasADi inference patch, numeric import infers the mask from the
+forward seed inputs or adjoint sensitivity outputs in the derivative family. Explicit
+`is_diff_in` overrides inference; conflicting forward/adjoint masks are rejected.
+Without derivative signatures, inputs remain differentiable by default. Inference reads
+sibling signatures during construction; supplying a mask keeps sibling loading lazy.
+For symbolic import, use `{"symbolic": True, "is_diff_in": flags}` with a CasADi build
+containing the GraphBuilder option forwarding fix.
+
+The primal and derivative graphs still accept `temperature`, so changing its value changes
+both predictions and state derivatives. The exporter creates neither `adj_temperature`
+outputs nor `fwd_temperature` seeds. Forward-over-adjoint differentiates only the active
+state inputs and the adjoint seed. CasADi's full derivative calling convention still
+includes the omitted slots; its wrapper supplies zeros for nondifferentiable sensitivities.
+This intentionally does not provide temperature or optimal-solution sensitivities.
+
+For this example the files are:
+
+| File | Inputs | Output |
+| --- | --- | --- |
+| `f.onnx` | `x`, `temperature` | `y` |
+| `adj_f.onnx` | `x`, `temperature`, `adj_y` | `adj_x` |
+| `fwd_adj_f.onnx` | `x`, `temperature`, `adj_y`, `fwd_x`, `fwd_adj_y` | `fwd_adj_x` |
+
+`forward=True` additionally exports `fwd_f.onnx` with inputs `x`, `temperature`, `fwd_x`
+and output `fwd_y`. Multiple differentiable arguments produce separate adjoint outputs
+and forward seeds. A single input defaults to the name `x`; multiple inputs default to
+`x0`, `x1`, etc. An all-false mask exports only the primal model.
+
+[examples/shuttle.py](examples/shuttle.py) trains a toy temperature-dependent vibration
+model and solves a four-stage multiple-shooting problem with FATROP, interleaved state/control
+variables and automatic structure detection. It checks both numeric and symbolic ONNX paths
+at two temperature values. Its model and data are illustrative, not a calibrated physical model.
 
 ## Development
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2
+
+- Move ONNX Runtime numerical validation into tests; exports retain ONNX structural checks.
+- Add `overwrite=True` to replace validated model families and remove stale derivatives.
+- Accept multiple tensor arguments and per-input `is_diff_in` flags. Runtime parameters
+  remain graph inputs, but their adjoints and forward seeds are omitted.
+- Add a four-stage FATROP shuttle example with a temperature-dependent NN path constraint.
+
 ## 0.1.1
 
 - Remove all runtime dependency declarations so installation preserves user-managed

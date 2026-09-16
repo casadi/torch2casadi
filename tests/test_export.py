@@ -5,7 +5,7 @@ from pathlib import Path
 import onnx
 import torch
 from torch import nn
-from torch2casadi import export
+from numerical_validation import export
 
 
 class MatrixModel(nn.Module):
@@ -49,6 +49,24 @@ class ExportTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 export(model, torch.zeros(2),d)
             self.assertEqual(marker.read_bytes(), b"existing model")
+
+    def test_overwrite_family(self):
+        torch.set_num_threads(1)
+        with tempfile.TemporaryDirectory() as d:
+            paths = [Path(d)/name for name in ("f.onnx", "adj_f.onnx", "fwd_f.onnx")]
+            for path in paths:
+                path.write_bytes(b"previous model")
+            unrelated = Path(d)/"other_f.onnx"
+            unrelated.write_bytes(b"unrelated")
+            with self.assertRaises(ValueError):
+                export(nn.Identity(), torch.zeros(0), d, overwrite=True)
+            for path in paths:
+                self.assertEqual(path.read_bytes(), b"previous model")
+            export(nn.Tanh(), torch.zeros(2), d, overwrite=True)
+            self.assertFalse(paths[-1].exists())
+            self.assertEqual(unrelated.read_bytes(), b"unrelated")
+            for name in ("f", "adj_f", "fwd_adj_f"):
+                onnx.checker.check_model(onnx.load(Path(d)/(name+".onnx")))
 
     def test_named_default_family(self):
         torch.set_num_threads(1)

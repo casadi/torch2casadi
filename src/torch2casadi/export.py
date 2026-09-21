@@ -11,13 +11,15 @@ from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._pytree import tree_map
 
 
-def export(model, example_input, directory, *, name="f", forward=False,
+def export(model, example_input, directory, *, name="f", forward=False, hessian=True,
            input_names=None, is_diff_in=None, overwrite=False):
     """Export evaluation, adjoint and forward-over-adjoint ONNX models.
 
     example_input is a tensor or a tuple of positional tensor arguments.
     is_diff_in selects whole arguments to differentiate (default: all).
     Other arguments remain runtime inputs, including in derivative graphs.
+    hessian=False skips the forward-over-adjoint graph, whose cost grows with the
+    number of forward directions (e.g. weights exposed as inputs for training).
     Inputs/output use PyTorch flatten order, exposed as CasADi column vectors.
     ONNX structure is checked before files are published.
     overwrite replaces an existing family only after all graphs pass that check.
@@ -143,12 +145,13 @@ def export(model, example_input, directory, *, name="f", forward=False,
     fwd_names = ["fwd_"+input_names[i] for i in active]
     specifications = [(name, f, xs, input_names, ["y"], static)]
     if active:
-        specifications += [
-            ("adj_"+name, a, xs+(w,), input_names+["adj_y"], adj_names, static+({1:N},)),
-            ("fwd_adj_"+name, fa, xs+(w,)+vs+(dw,),
-             input_names+["adj_y"]+fwd_names+["fwd_adj_y"],
-             ["fwd_"+n for n in adj_names], static+({1:N},)+({1:F},)*len(active)+({1:P},)),
-        ]
+        specifications.append(
+            ("adj_"+name, a, xs+(w,), input_names+["adj_y"], adj_names, static+({1:N},)))
+        if hessian:
+            specifications.append(
+                ("fwd_adj_"+name, fa, xs+(w,)+vs+(dw,),
+                 input_names+["adj_y"]+fwd_names+["fwd_adj_y"],
+                 ["fwd_"+n for n in adj_names], static+({1:N},)+({1:F},)*len(active)+({1:P},)))
         if forward:
             specifications.append(("fwd_"+name, fw, xs+vs, input_names+fwd_names,
                                    ["fwd_y"], static+({1:F},)*len(active)))
@@ -169,14 +172,15 @@ def export(model, example_input, directory, *, name="f", forward=False,
     if active and count > 1:
         # Separate arguments introduce slice gradients when concatenated.
         # Trace AD before batching: slice-backward's vmap rule fixes the outer seed count.
-        def one_mixed(*args):
-            flat = tuple(v[:, 0] for v in args[:count])
-            fn = reduced(flat, with_adjoint=True)
-            point = tuple(flat[i] for i in active)+(args[count],)
-            return jvp(fn, point, args[count+1:])
-        single_mixed = make_fx(one_mixed, decomposition_table=decompositions,
-            tracing_mode="symbolic", _allow_non_fake_inputs=True)(
-                *xs, w.T, *(v[:, 0] for v in vs), dw[:, :na].T)
+        if hessian:
+            def one_mixed(*args):
+                flat = tuple(v[:, 0] for v in args[:count])
+                fn = reduced(flat, with_adjoint=True)
+                point = tuple(flat[i] for i in active)+(args[count],)
+                return jvp(fn, point, args[count+1:])
+            single_mixed = make_fx(one_mixed, decomposition_table=decompositions,
+                tracing_mode="symbolic", _allow_non_fake_inputs=True)(
+                    *xs, w.T, *(v[:, 0] for v in vs), dw[:, :na].T)
         if forward:
             def one_forward(*args):
                 flat = tuple(v[:, 0] for v in args[:count])

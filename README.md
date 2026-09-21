@@ -62,7 +62,8 @@ Default files:
 | `adj_f.onnx` | `x`, `adj_y`: ny × nadj | `adj_x`: nx × nadj |
 | `fwd_adj_f.onnx` | `x`, `adj_y`, `fwd_x`: nx × nfwd, `fwd_adj_y`: ny × (nfwd·nadj) | `fwd_adj_x`: nx × (nfwd·nadj) |
 
-`export(..., forward=True)` also writes `fwd_f.onnx`. `name="net"` changes the family to `net.onnx`, `adj_net.onnx`, etc.
+`export(..., forward=True)` also writes `fwd_f.onnx`. `export(..., hessian=False)` skips
+`fwd_adj_f.onnx`. `name="net"` changes the family to `net.onnx`, `adj_net.onnx`, etc.
 
 Combined columns are grouped by outer forward direction, then inner adjoint direction. The mixed graph differentiates both the primal input and the adjoint seed. It computes products through AD without forming a dense Jacobian or Hessian as an intermediate.
 
@@ -129,6 +130,51 @@ and forward seeds. A single input defaults to the name `x`; multiple inputs defa
 model and solves a four-stage multiple-shooting problem with FATROP, interleaved state/control
 variables and automatic structure detection. It checks both numeric and symbolic ONNX paths
 at two temperature values. Its model and data are illustrative, not a calibrated physical model.
+
+## Weights as decision variables
+
+By default the model parameters are baked into the graphs as constants, which is what
+inference needs. To *train* inside a CasADi NLP (a universal ODE, a surrogate with hard
+constraints, ...), the weights must stay decision variables. No exporter support is needed
+for that: make the weights arguments of `forward`, and they become graph inputs of the whole
+family like any other argument. A small wrapper does this for an existing module:
+
+```python
+class FreeWeights(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        self.names = [n for n, _ in model.named_parameters()]
+
+    def forward(self, x, *params):
+        return torch.func.functional_call(self.model, dict(zip(self.names, params)), (x,))
+
+model = torch.nn.Sequential(torch.nn.Linear(1, 8), torch.nn.Tanh(), torch.nn.Linear(8, 1))
+params = [p.detach() for p in model.parameters()]
+path = export(FreeWeights(model), (torch.zeros(1, 1), *params), "generated",
+              input_names=["v", "W1", "b1", "W2", "b2"], hessian=False)
+f = ca.GraphBuilder(str(path)).create("f")   # f:(v,W1[8],b1[8],W2[8],b2)->(y)
+
+opti = ca.Opti()
+weights = [opti.variable(p.numel()) for p in params]
+for w, p in zip(weights, params):
+    opti.set_initial(w, p.reshape(-1).numpy())
+...
+opti.solver("ipopt", {}, {"hessian_approximation": "limited-memory",
+                          "limited_memory_max_history": 50})
+sol = opti.solve()
+for w, p in zip(weights, model.parameters()):
+    p.data = torch.tensor(sol.value(w)).reshape(p.shape).to(p.dtype)
+```
+
+Pass a subset of `named_parameters()` to free only some layers. Each weight tensor is one
+input, flattened in PyTorch element order like every other input. Gradients with respect to
+the weights come from `adj_f.onnx` at the cost of one adjoint sweep, whatever their number.
+Exact Hessians are different: `fwd_adj_f.onnx` is swept once per forward direction, and a
+Hessian block over the weights needs as many directions as there are weights. For small
+networks that is fine and gives Newton-type convergence; for large ones pass `hessian=False`
+and use a quasi-Newton Hessian in the NLP solver, as above. The primal graph also imports
+symbolically (`{"symbolic": True}`), in which case CasADi differentiates it itself.
 
 ## Development
 

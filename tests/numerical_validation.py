@@ -25,7 +25,9 @@ def export(model, example_input, directory, **options):
 
     families = [name]
     if active:
-        families += ['adj_'+name, 'fwd_adj_'+name]
+        families += ['adj_'+name]
+        if options.get('hessian', True):
+            families += ['fwd_adj_'+name]
         if options.get('forward'):
             families += ['fwd_'+name]
     sessions = {key: ort.InferenceSession(str(Path(directory)/(key+'.onnx')),
@@ -60,11 +62,12 @@ def export(model, example_input, directory, **options):
                              for i in range(len(active)))
 
             expected['adj_'+name] = adjoint(*point, w)
-            mixed = [torch.func.jvp(adjoint, point+(w,),
-                     tuple(v[:, j] for v in directions)+(dw[:, j*na:(j+1)*na],))[1]
-                     for j in range(nf)]
-            expected['fwd_adj_'+name] = tuple(torch.cat([v[i] for v in mixed], dim=1)
-                                             for i in range(len(active)))
+            if options.get('hessian', True):
+                mixed = [torch.func.jvp(adjoint, point+(w,),
+                         tuple(v[:, j] for v in directions)+(dw[:, j*na:(j+1)*na],))[1]
+                         for j in range(nf)]
+                expected['fwd_adj_'+name] = tuple(torch.cat([v[i] for v in mixed], dim=1)
+                                                 for i in range(len(active)))
             if options.get('forward'):
                 expected['fwd_'+name] = (torch.stack([
                     torch.func.jvp(primal, point, tuple(v[:, j] for v in directions))[1]

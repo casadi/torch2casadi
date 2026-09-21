@@ -121,5 +121,47 @@ class ParameterIntegrationTests(unittest.TestCase):
                     2.8*np.eye(2), rtol=2e-5, atol=2e-6)
 
 
+
+
+class FreeWeights(nn.Module):
+    """Expose a module's parameters as forward arguments (weights as NLP variables)."""
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        self.names = [n for n, _ in model.named_parameters()]
+
+    def forward(self, x, *params):
+        return torch.func.functional_call(self.model, dict(zip(self.names, params)), (x,))
+
+
+class WeightInputTests(unittest.TestCase):
+    def test_weights_as_inputs(self):
+        torch.set_num_threads(1)
+        torch.manual_seed(0)
+        model = nn.Sequential(nn.Linear(2, 8), nn.Tanh(), nn.Linear(8, 1)).double()
+        params = tuple(p.detach() for p in model.parameters())
+        names = ["x", "W1", "b1", "W2", "b2"]
+        with tempfile.TemporaryDirectory() as directory:
+            export(FreeWeights(model), (torch.zeros(1, 2, dtype=torch.float64),)+params,
+                   directory, input_names=names)
+            graph = onnx.load(Path(directory)/'fwd_adj_f.onnx').graph
+            self.assertEqual([v.name for v in graph.input], names+["adj_y"]+
+                             ["fwd_"+n for n in names]+["fwd_adj_y"])
+            self.assertEqual([v.name for v in graph.output], ["fwd_adj_"+n for n in names])
+
+    def test_hessian_opt_out(self):
+        torch.set_num_threads(1)
+        torch.manual_seed(1)
+        model = nn.Sequential(nn.Linear(2, 8), nn.Tanh(), nn.Linear(8, 1))
+        params = tuple(p.detach() for p in model.parameters())
+        with tempfile.TemporaryDirectory() as directory:
+            export(FreeWeights(model), (torch.zeros(1, 2),)+params, directory,
+                   input_names=["x", "W1", "b1", "W2", "b2"], hessian=False)
+            files = sorted(p.name for p in Path(directory).glob('*.onnx'))
+            self.assertEqual(files, ['adj_f.onnx', 'f.onnx'])
+            graph = onnx.load(Path(directory)/'adj_f.onnx').graph
+            self.assertEqual([v.name for v in graph.output],
+                             ['adj_x', 'adj_W1', 'adj_b1', 'adj_W2', 'adj_b2'])
+
 if __name__ == '__main__':
     unittest.main()

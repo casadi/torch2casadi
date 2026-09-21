@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3
+
+- Add `hessian=False` to skip the forward-over-adjoint graph, whose cost grows with the
+  number of forward directions; pair it with a quasi-Newton Hessian in the solver.
+- Document exposing model weights as forward arguments so they can be NLP decision
+  variables (training), which needs no exporter support.
+
 ## 0.1.2
 
 - Move ONNX Runtime numerical validation into tests; exports retain ONNX structural checks.
